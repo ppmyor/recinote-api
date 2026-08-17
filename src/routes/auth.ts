@@ -9,6 +9,7 @@ import { asyncHandler } from "../lib/asyncHandler";
 import { publicUserSelect, toPublicUser } from "../lib/publicUser";
 import { checkPasswordMatchSchema, signupSchema, loginSchema } from "../validation/auth";
 import { env } from "../config/env";
+import { loginRateLimiter, signupRateLimiter } from "../middleware/rateLimiter";
 
 export const authRouter = Router();
 
@@ -122,9 +123,16 @@ authRouter.post(
  *           application/json:
  *             schema:
  *               $ref: '#/components/schemas/ErrorResponse'
+ *       429:
+ *         description: Too many signup attempts, try again later
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
  */
 authRouter.post(
   "/signup",
+  signupRateLimiter,
   asyncHandler(async (req, res) => {
     const { name, email, password } = signupSchema.parse(req.body);
     const passwordHash = await hashPassword(password);
@@ -199,9 +207,16 @@ authRouter.post(
  *           application/json:
  *             schema:
  *               $ref: '#/components/schemas/ErrorResponse'
+ *       429:
+ *         description: Too many login attempts, try again later
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
  */
 authRouter.post(
   "/login",
+  loginRateLimiter,
   asyncHandler(async (req, res) => {
     const { email, password } = loginSchema.parse(req.body);
 
