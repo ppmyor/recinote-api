@@ -1,0 +1,35 @@
+services:
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "4000:4000"
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: postgresql://recinote:recinote@db:5432/recinote?schema=public
+    depends_on:
+      db:
+        condition: service_healthy
+    command: sh -c "npx prisma migrate deploy && node dist/index.js"
+
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: recinote
+      POSTGRES_PASSWORD: recinote
+      POSTGRES_DB: recinote
+    volumes:
+      - recinote_db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U recinote -d recinote"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  recinote_db_data:
