@@ -1,19 +1,10 @@
 import { Router } from "express";
-import { Prisma } from "@prisma/client";
-import { prisma } from "../lib/prisma";
-import { hashPassword, comparePassword } from "../lib/password";
-import { signAuthToken } from "../lib/jwt";
-import { HttpError } from "../lib/httpError";
-import { sendSuccess } from "../lib/apiResponse";
-import { asyncHandler } from "../lib/asyncHandler";
-import { publicUserSelect, toPublicUser } from "../lib/publicUser";
-import { checkPasswordMatchSchema, signupSchema, loginSchema } from "../validation/auth";
-import { env } from "../config/env";
+import { authController } from "../controllers/auth.controller";
+import { requireAuth } from "../middleware/requireAuth";
 import { loginRateLimiter, signupRateLimiter } from "../middleware/rateLimiter";
+import { asyncHandler } from "../lib/asyncHandler";
 
 export const authRouter = Router();
-
-const AUTH_COOKIE_NAME = "access_token";
 
 /**
  * @openapi
@@ -59,13 +50,7 @@ const AUTH_COOKIE_NAME = "access_token";
  *             schema:
  *               $ref: '#/components/schemas/ErrorResponse'
  */
-authRouter.post(
-  "/check-password-match",
-  asyncHandler((req, res) => {
-    const { password, passwordConfirm } = checkPasswordMatchSchema.parse(req.body);
-    sendSuccess(res, 200, { match: password === passwordConfirm });
-  }),
-);
+authRouter.post("/check-password-match", asyncHandler(authController.checkPasswordMatch));
 
 /**
  * @openapi
@@ -130,28 +115,7 @@ authRouter.post(
  *             schema:
  *               $ref: '#/components/schemas/ErrorResponse'
  */
-authRouter.post(
-  "/signup",
-  signupRateLimiter,
-  asyncHandler(async (req, res) => {
-    const { name, email, password } = signupSchema.parse(req.body);
-    const passwordHash = await hashPassword(password);
-
-    try {
-      const user = await prisma.user.create({
-        data: { name, email, passwordHash },
-        select: publicUserSelect,
-      });
-
-      sendSuccess(res, 201, user);
-    } catch (err) {
-      if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002") {
-        throw new HttpError(409, "EMAIL_ALREADY_EXISTS", "email is already in use");
-      }
-      throw err;
-    }
-  }),
-);
+authRouter.post("/signup", signupRateLimiter, asyncHandler(authController.signup));
 
 /**
  * @openapi
@@ -159,6 +123,9 @@ authRouter.post(
  *   post:
  *     summary: Log in and receive an httpOnly session cookie
  *     tags: [Auth]
+ *     security:
+ *       - {}
+ *       - cookieAuth: []
  *     requestBody:
  *       required: true
  *       content:
@@ -214,25 +181,68 @@ authRouter.post(
  *             schema:
  *               $ref: '#/components/schemas/ErrorResponse'
  */
-authRouter.post(
-  "/login",
-  loginRateLimiter,
-  asyncHandler(async (req, res) => {
-    const { email, password } = loginSchema.parse(req.body);
+authRouter.post("/login", loginRateLimiter, asyncHandler(authController.login));
 
-    const user = await prisma.user.findUnique({ where: { email } });
-    if (!user || !(await comparePassword(password, user.passwordHash))) {
-      throw new HttpError(401, "INVALID_CREDENTIALS", "invalid email or password");
-    }
+/**
+ * @openapi
+ * /auth/me:
+ *   get:
+ *     summary: Get the currently authenticated user
+ *     tags: [Auth]
+ *     security:
+ *       - cookieAuth: []
+ *     responses:
+ *       200:
+ *         description: Current user
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 code:
+ *                   type: integer
+ *                   example: 200
+ *                 data:
+ *                   $ref: '#/components/schemas/User'
+ *       401:
+ *         description: Not authenticated
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ */
+authRouter.get("/me", requireAuth, asyncHandler(authController.me));
 
-    const token = signAuthToken(user.id);
-    res.cookie(AUTH_COOKIE_NAME, token, {
-      httpOnly: true,
-      secure: env.nodeEnv === "production",
-      sameSite: "lax",
-      maxAge: env.jwtExpiresInMs,
-    });
-
-    sendSuccess(res, 200, toPublicUser(user));
-  }),
-);
+/**
+ * @openapi
+ * /auth/logout:
+ *   post:
+ *     summary: Log out and clear the session cookie
+ *     tags: [Auth]
+ *     security:
+ *       - cookieAuth: []
+ *     responses:
+ *       200:
+ *         description: Logged out; access_token cookie is cleared
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 code:
+ *                   type: integer
+ *                   example: 200
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     loggedOut:
+ *                       type: boolean
+ *                       example: true
+ */
+authRouter.post("/logout", asyncHandler(authController.logout));

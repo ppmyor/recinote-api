@@ -5,12 +5,16 @@ export const publicUserSelect = {
   createdAt: true,
 } as const;
 
-export function toPublicUser(user: {
+export type PublicUser = {
   id: string;
   name: string;
   email: string;
   createdAt: Date;
-}) {
+};
+
+export type UserWithPasswordHash = PublicUser & { passwordHash: string };
+
+export function toPublicUser(user: PublicUser): PublicUser {
   return {
     id: user.id,
     name: user.name,

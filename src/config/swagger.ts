@@ -14,6 +14,13 @@ export const swaggerSpec = swaggerJsdoc({
       { name: "Auth", description: "회원가입, 로그인, 비밀번호 검증" },
     ],
     components: {
+      securitySchemes: {
+        cookieAuth: {
+          type: "apiKey",
+          in: "cookie",
+          name: "access_token",
+        },
+      },
       schemas: {
         User: {
           type: "object",
