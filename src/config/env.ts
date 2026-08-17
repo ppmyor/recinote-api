@@ -6,6 +6,25 @@ function required(key: string): string {
   return value;
 }
 
+const JWT_SECRET_MIN_LENGTH = 32;
+
+function requiredWithMinLength(key: string, minLength: number): string {
+  const value = required(key);
+  if (value.length < minLength) {
+    throw new Error(`${key} must be at least ${minLength} characters long`);
+  }
+  return value;
+}
+
+// ALLOWED_ORIGINS is optional: missing/empty just means no cross-origin
+// browser requests are allowed, not a fatal misconfiguration like JWT_SECRET.
+function parseAllowedOrigins(value: string | undefined): string[] {
+  return (value ?? "")
+    .split(",")
+    .map((origin) => origin.trim())
+    .filter((origin) => origin.length > 0);
+}
+
 const DURATION_MS: Record<string, number> = {
   ms: 1,
   s: 1000,
@@ -34,7 +53,8 @@ export const env = {
   nodeEnv: process.env.NODE_ENV ?? "development",
   port: Number(process.env.PORT ?? 4000),
   databaseUrl: required("DATABASE_URL"),
-  jwtSecret: required("JWT_SECRET"),
+  jwtSecret: requiredWithMinLength("JWT_SECRET", JWT_SECRET_MIN_LENGTH),
   jwtExpiresIn,
   jwtExpiresInMs: parseExpiresInToMs(jwtExpiresIn),
+  allowedOrigins: parseAllowedOrigins(process.env.ALLOWED_ORIGINS),
 };

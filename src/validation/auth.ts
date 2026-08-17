@@ -9,6 +9,8 @@ const passwordSchema = z
   .min(PASSWORD_MIN_LENGTH, PASSWORD_MESSAGE)
   .regex(PASSWORD_REGEX, PASSWORD_MESSAGE);
 
+const emailSchema = z.string().trim().toLowerCase().email("invalid email");
+
 export const checkPasswordMatchSchema = z.object({
   password: z.string(),
   passwordConfirm: z.string(),
@@ -17,7 +19,7 @@ export const checkPasswordMatchSchema = z.object({
 export const signupSchema = z
   .object({
     name: z.string().min(1, "name is required"),
-    email: z.string().email("invalid email"),
+    email: emailSchema,
     password: passwordSchema,
     passwordConfirm: z.string(),
   })
@@ -27,6 +29,6 @@ export const signupSchema = z
   });
 
 export const loginSchema = z.object({
-  email: z.string().email("invalid email"),
+  email: emailSchema,
   password: z.string(),
 });
